@@ -2,6 +2,7 @@ import time
 import board
 import busio
 import digitalio
+import pwmio
 import adafruit_ahtx0
 from adafruit_ht16k33.segments import Seg14x4
 
@@ -26,10 +27,8 @@ yellow_led.direction = digitalio.Direction.OUTPUT
 red_led = digitalio.DigitalInOut(board.TX)
 red_led.direction = digitalio.Direction.OUTPUT
 
-# === Buzzer Setup ===
-buzzer = digitalio.DigitalInOut(board.A1)
-buzzer.direction = digitalio.Direction.OUTPUT
-buzzer.value = False
+# === Buzzer Setup (PWM) ===
+buzzer = pwmio.PWMOut(board.A1, frequency=400, duty_cycle=0)
 
 # === Button Setup (start/stop stopwatch) ===
 button = digitalio.DigitalInOut(board.A0)
@@ -39,21 +38,24 @@ button.pull = digitalio.Pull.UP
 # === Configuration ===
 target_temp = 80
 critical_temp = 95
-switch_interval = 5
+switch_interval = 5  # seconds between display modes
 
 STATE_SAFE = 0
 STATE_WARNING = 1
 STATE_DANGEROUS = 2
 current_state = STATE_SAFE
 
+# === Timing & Display Mode ===
 last_switch = time.monotonic()
-show_temperature = True
+display_mode = 0  # 0 = temp, 1 = humidity, 2 = stopwatch
 
-# Stopwatch variables
+# === Stopwatch variables ===
 stopwatch_running = False
 stopwatch_start_time = 0
 stopwatch_elapsed = 0
-last_button_state = True  # start high (not pressed)
+last_button_state = True
+
+# === Functions ===
 
 def update_leds(current_temp):
     diff = abs(current_temp - target_temp)
@@ -77,23 +79,27 @@ def determine_state(temp):
 
 def handle_state(state):
     if state == STATE_DANGEROUS:
-        buzzer.value = True
+        buzzer.duty_cycle = 3000  # Beep
         time.sleep(0.1)
-        buzzer.value = False
+        buzzer.duty_cycle = 0
     else:
-        buzzer.value = False
+        buzzer.duty_cycle = 0  # Always off otherwise
 
 def format_seconds(seconds):
     mins = int(seconds) // 60
     secs = int(seconds) % 60
     return f"{mins:>2}{secs:02}"
 
+# === Main Loop ===
+
 while True:
     now = time.monotonic()
+
+    # === Read sensors ===
     temperature = sensor.temperature
     humidity = sensor.relative_humidity
 
-    # === Update State & Buzzer ===
+    # === State machine for temperature ===
     new_state = determine_state(temperature)
     if new_state != current_state:
         current_state = new_state
@@ -102,9 +108,9 @@ while True:
     # === LED Feedback ===
     update_leds(temperature)
 
-    # === Button Debounce ===
+    # === Button debounce for stopwatch control ===
     current_button = button.value
-    if last_button_state and not current_button:  # button pressed
+    if last_button_state and not current_button:  # Button just pressed
         if stopwatch_running:
             stopwatch_elapsed += now - stopwatch_start_time
             stopwatch_running = False
@@ -113,18 +119,21 @@ while True:
             stopwatch_running = True
     last_button_state = current_button
 
-    # === Display Switching ===
+    # === Cycle display mode every switch_interval seconds ===
     if now - last_switch >= switch_interval:
-        show_temperature = not show_temperature
+        display_mode = (display_mode + 1) % 3  # 0 → 1 → 2 → 0 ...
         last_switch = now
 
-    # === Display Content ===
-    if show_temperature:
+    # === Display output ===
+    if display_mode == 0:
         display.print(f"T{int(temperature):>3}")
-    elif stopwatch_running:
-        elapsed = stopwatch_elapsed + (now - stopwatch_start_time)
-        display.print(format_seconds(elapsed))
-    else:
+    elif display_mode == 1:
         display.print(f"H{int(humidity):>3}")
+    elif display_mode == 2:
+        if stopwatch_running:
+            elapsed = stopwatch_elapsed + (now - stopwatch_start_time)
+        else:
+            elapsed = stopwatch_elapsed
+        display.print(format_seconds(elapsed))
 
     time.sleep(0.1)

@@ -2,17 +2,18 @@ import time
 import board
 import busio
 import digitalio
+import pwmio  # ✅ For PWM-based buzzer
 import adafruit_ahtx0
 from adafruit_ht16k33.segments import Seg14x4
-from adafruit_apds9960.apds9960 import APDS9960  # NEW
+from adafruit_apds9960.apds9960 import APDS9960
 
 # === I2C Setup ===
 i2c = busio.I2C(board.SCL, board.SDA)
 
 # === Sensors ===
 sensor = adafruit_ahtx0.AHTx0(i2c)
-apds = APDS9960(i2c)  # NEW
-apds.enable_color = True  # NEW
+apds = APDS9960(i2c)
+apds.enable_color = True
 
 # === Display Setup ===
 display = Seg14x4(i2c)
@@ -22,14 +23,15 @@ display.fill(0)
 # === LEDs ===
 green_led = digitalio.DigitalInOut(board.A2)
 green_led.direction = digitalio.Direction.OUTPUT
+
 yellow_led = digitalio.DigitalInOut(board.A3)
 yellow_led.direction = digitalio.Direction.OUTPUT
+
 red_led = digitalio.DigitalInOut(board.TX)
 red_led.direction = digitalio.Direction.OUTPUT
 
-# === Buzzer ===
-buzzer = digitalio.DigitalInOut(board.A1)
-buzzer.direction = digitalio.Direction.OUTPUT
+# === Buzzer Setup (PWM) ===
+buzzer = pwmio.PWMOut(board.A1, frequency=400, duty_cycle=0)  # ✅ Passive buzzer tone
 
 # === Button ===
 button = digitalio.DigitalInOut(board.A0)
@@ -56,7 +58,7 @@ last_button_state = True
 
 def update_leds(current_temp, ambient_light):
     diff = abs(current_temp - target_temp)
-    bright = ambient_light < 100  # Simple threshold
+    bright = ambient_light < 100
 
     green_led.value = yellow_led.value = red_led.value = False
 
@@ -80,11 +82,11 @@ def determine_state(temp):
 
 def handle_state(state):
     if state == STATE_DANGEROUS:
-        buzzer.value = True
+        buzzer.duty_cycle = 3000  # ✅ Beep at 400 Hz
         time.sleep(0.1)
-        buzzer.value = False
+        buzzer.duty_cycle = 0
     else:
-        buzzer.value = False
+        buzzer.duty_cycle = 0  # ✅ Always off otherwise
 
 def format_seconds(seconds):
     mins = int(seconds) // 60
@@ -93,10 +95,10 @@ def format_seconds(seconds):
 
 def get_ambient_light():
     try:
-        _, g, _, _ = apds.color_data  # Get green channel
+        _, g, _, _ = apds.color_data
         return g
     except Exception:
-        return 100  # Default to "bright" if read fails
+        return 100  # Default to "bright" if error
 
 while True:
     now = time.monotonic()
@@ -108,11 +110,11 @@ while True:
 
     # === Update display brightness based on ambient light ===
     if ambient < 50:
-        display.brightness = 1.0  # dim room
+        display.brightness = 1.0
     elif ambient < 150:
-        display.brightness = 0.5  # medium
+        display.brightness = 0.5
     else:
-        display.brightness = 0.1  # bright room
+        display.brightness = 0.1
 
     # === Update State & Buzzer ===
     new_state = determine_state(temperature)

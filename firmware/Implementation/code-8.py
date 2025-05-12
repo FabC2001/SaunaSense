@@ -2,6 +2,7 @@ import time
 import board
 import busio
 import digitalio
+import pwmio  # ✅ NEW for buzzer
 import adafruit_ahtx0
 from adafruit_ht16k33.segments import Seg14x4
 from adafruit_apds9960.apds9960 import APDS9960
@@ -29,23 +30,20 @@ display.fill(0)
 # === LEDs ===
 green_led = digitalio.DigitalInOut(board.A2)
 green_led.direction = digitalio.Direction.OUTPUT
-
 yellow_led = digitalio.DigitalInOut(board.A3)
 yellow_led.direction = digitalio.Direction.OUTPUT
-
 red_led = digitalio.DigitalInOut(board.TX)
 red_led.direction = digitalio.Direction.OUTPUT
 
-# === Buzzer ===
-buzzer = digitalio.DigitalInOut(board.A1)
-buzzer.direction = digitalio.Direction.OUTPUT
+# === Buzzer (PWM) ===
+buzzer = pwmio.PWMOut(board.A1, frequency=400, duty_cycle=0)
 
 # === Button (Stopwatch Control) ===
 button = digitalio.DigitalInOut(board.A0)
 button.direction = digitalio.Direction.INPUT
 button.pull = digitalio.Pull.UP
 
-# === Initial Configuration ===
+# === Configuration ===
 target_temp = 80
 critical_temp = 95
 switch_interval = 5
@@ -91,11 +89,11 @@ def determine_state(temp):
 
 def handle_state(state):
     if state == STATE_DANGEROUS:
-        buzzer.value = True
+        buzzer.duty_cycle = 3000
         time.sleep(0.1)
-        buzzer.value = False
+        buzzer.duty_cycle = 0
     else:
-        buzzer.value = False
+        buzzer.duty_cycle = 0
 
 def format_seconds(seconds):
     mins = int(seconds) // 60
