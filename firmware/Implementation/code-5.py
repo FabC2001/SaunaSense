@@ -2,6 +2,7 @@ import time
 import board
 import busio
 import digitalio
+import pwmio  # ✅ Added for PWM buzzer
 import adafruit_ahtx0
 from adafruit_ht16k33.segments import Seg14x4
 
@@ -26,10 +27,8 @@ yellow_led.direction = digitalio.Direction.OUTPUT
 red_led = digitalio.DigitalInOut(board.TX)
 red_led.direction = digitalio.Direction.OUTPUT
 
-# === Buzzer Setup ===
-buzzer = digitalio.DigitalInOut(board.A1)
-buzzer.direction = digitalio.Direction.OUTPUT
-buzzer.value = False
+# === Buzzer Setup (PWM) ===
+buzzer = pwmio.PWMOut(board.A1, frequency=400, duty_cycle=0)  # ✅ 400 Hz, initially off
 
 # === Configuration ===
 target_temp = 80  # user-defined safe temp
@@ -68,15 +67,13 @@ def determine_state(temp):
         return STATE_SAFE
 
 def handle_state(state):
-    if state == STATE_SAFE:
-        buzzer.value = False
-    elif state == STATE_WARNING:
-        buzzer.value = False
+    if state == STATE_SAFE or state == STATE_WARNING:
+        buzzer.duty_cycle = 0  # Off
     elif state == STATE_DANGEROUS:
-        # Blink buzzer briefly
-        buzzer.value = True
+        # Pulse the buzzer briefly
+        buzzer.duty_cycle = 3000  # ✅ Max duty cycle
         time.sleep(0.1)
-        buzzer.value = False
+        buzzer.duty_cycle = 0
 
 while True:
     now = time.monotonic()
