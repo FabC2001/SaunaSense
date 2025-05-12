@@ -23,5 +23,5 @@ An IoT project using the Adafruit Feather RP2040 to monitor and display sauna co
    ```bash
    git clone git@github.com:FabC2001/SaunaSense.git
 2. Open in VS Code or your preferred editor
-
-3. Upload main.py to the RP2040 (if using CircuitPython)
+3. Upload code.py to the RP2040 (if using CircuitPython)
+4. Upload libs to the RP2040
