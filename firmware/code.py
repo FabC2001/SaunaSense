@@ -21,14 +21,14 @@ display = BigSegment(i2c)
 display.fill(0)
 
 # === GPIO setup ===
-button = digitalio.DigitalInOut(board.D5)
+button = digitalio.DigitalInOut(board.A0)
 button.direction = digitalio.Direction.INPUT
 button.pull = digitalio.Pull.UP
 
-led = digitalio.DigitalInOut(board.D6)
+led = digitalio.DigitalInOut(board.A2)
 led.direction = digitalio.Direction.OUTPUT
 
-buzzer = pwmio.PWMOut(board.D9, duty_cycle=0, frequency=440, variable_frequency=True)
+buzzer = pwmio.PWMOut(board.A1, duty_cycle=0, frequency=440, variable_frequency=True)
 
 # === Potentiometer ===
 pot = analogio.AnalogIn(board.A0)
