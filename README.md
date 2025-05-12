@@ -1,2 +1,0 @@
-# SaunaSense
-SaunaSense Code
