@@ -15,18 +15,20 @@ i2c = busio.I2C(board.SCL, board.SDA)
 # === Sensors ===
 sensor = adafruit_ahtx0.AHTx0(i2c)
 apds = APDS9960(i2c)
-apds.enable_color = True  # Use green channel for ambient light
+apds.enable_color = True
 
-# === Rotary Encoder Setup (Seesaw I2C) ===
+# === Rotary Encoder (Seesaw) ===
 encoder = Seesaw(i2c, addr=0x36)
 rotary = rotaryio.IncrementalEncoder(encoder)
 last_position = rotary.position
+encoder.pin_mode(24, encoder.INPUT_PULLUP)  # Enable button on encoder
+last_encoder_button = True  # Last known state of button
 
 # === Display Setup ===
 display = Seg14x4(i2c)
 display.fill(0)
 
-# === LEDs Setup ===
+# === LEDs ===
 green_led = digitalio.DigitalInOut(board.A2)
 green_led.direction = digitalio.Direction.OUTPUT
 yellow_led = digitalio.DigitalInOut(board.A3)
@@ -34,15 +36,15 @@ yellow_led.direction = digitalio.Direction.OUTPUT
 red_led = digitalio.DigitalInOut(board.TX)
 red_led.direction = digitalio.Direction.OUTPUT
 
-# === Buzzer Setup (PWM) ===
+# === Buzzer (PWM) ===
 buzzer = pwmio.PWMOut(board.A1, frequency=400, duty_cycle=0)
 
-# === Button Setup (Stopwatch Toggle) ===
+# === Button (Stopwatch Toggle) ===
 button = digitalio.DigitalInOut(board.A0)
 button.direction = digitalio.Direction.INPUT
 button.pull = digitalio.Pull.UP
 
-# === Config ===
+# === Configuration ===
 target_temp = 80
 critical_temp = 95
 STATE_SAFE = 0
@@ -56,29 +58,24 @@ stopwatch_start_time = 0
 stopwatch_elapsed = 0
 last_button_state = True
 
-# === Display Mode Rotation ===
-display_mode = 0  # 0 = Temp, 1 = Humidity, 2 = Stopwatch, 3 = Set Temp
-last_switch = time.monotonic()
-switch_interval = 3  # seconds
+# === Display Mode Switching via Rotary Button ===
+display_mode = 0  # 0=temp, 1=humidity, 2=stopwatch, 3=set_temp
 
 # === Functions ===
 
 def get_ambient_light():
-    """Return green channel value from APDS9960."""
     try:
         _, g, _, _ = apds.color_data
         return g
     except Exception:
-        return 100  # fallback value
+        return 100
 
 def set_display_brightness(ambient):
-    """Smoothly map ambient light (0–300) to display brightness (0.1–1.0)."""
     clamped = min(max(ambient, 0), 300)
     normalized = clamped / 300
     display.brightness = 0.1 + (normalized * 0.9)
 
 def update_leds(current_temp):
-    """Show green/yellow/red based on how close we are to target_temp."""
     diff = abs(current_temp - target_temp)
     green_led.value = yellow_led.value = red_led.value = False
     if diff <= 3:
@@ -89,7 +86,6 @@ def update_leds(current_temp):
         red_led.value = True
 
 def determine_state(temp):
-    """Return system state: safe, warning, or dangerous."""
     if temp >= critical_temp:
         return STATE_DANGEROUS
     elif abs(temp - target_temp) > 10:
@@ -98,7 +94,6 @@ def determine_state(temp):
         return STATE_SAFE
 
 def handle_state(state):
-    """Activate buzzer if temperature is dangerous."""
     if state == STATE_DANGEROUS:
         buzzer.duty_cycle = 3000
         time.sleep(0.1)
@@ -107,7 +102,6 @@ def handle_state(state):
         buzzer.duty_cycle = 0
 
 def format_seconds(seconds):
-    """Format stopwatch seconds to MMSS display string."""
     mins = int(seconds) // 60
     secs = int(seconds) % 60
     return f"{mins:>2}{secs:02}"
@@ -120,19 +114,23 @@ while True:
     temperature = sensor.temperature
     humidity = sensor.relative_humidity
     ambient = get_ambient_light()
-
-    # === Display Brightness ===
     set_display_brightness(ambient)
 
-    # === Update target temperature from rotary encoder ===
+    # === Rotary Encoder Movement ===
     position = rotary.position
     if position != last_position:
         delta = position - last_position
         target_temp += delta
-        target_temp = max(40, min(110, target_temp))
+        target_temp = max(0, min(100, target_temp))  # new range: 0–100
         last_position = position
 
-    # === Update system state and handle buzzer ===
+    # === Rotary Encoder Button Press ===
+    encoder_button = encoder.digital_read(24)
+    if last_encoder_button and not encoder_button:  # just pressed
+        display_mode = (display_mode + 1) % 4  # 0→1→2→3→0
+    last_encoder_button = encoder_button
+
+    # === System State & Buzzer ===
     new_state = determine_state(temperature)
     if new_state != current_state:
         current_state = new_state
@@ -141,7 +139,7 @@ while True:
     # === LED Feedback ===
     update_leds(temperature)
 
-    # === Stopwatch Button Logic ===
+    # === Stopwatch Toggle via A0 Button ===
     current_button = button.value
     if last_button_state and not current_button:
         if stopwatch_running:
@@ -151,11 +149,6 @@ while True:
             stopwatch_start_time = now
             stopwatch_running = True
     last_button_state = current_button
-
-    # === Display Mode Switching ===
-    if now - last_switch >= switch_interval:
-        display_mode = (display_mode + 1) % 4  # 0–3
-        last_switch = now
 
     # === Display Output ===
     if display_mode == 0:
@@ -169,6 +162,6 @@ while True:
             elapsed = stopwatch_elapsed
         display.print(format_seconds(elapsed))
     elif display_mode == 3:
-        display.print(f"S{int(target_temp):>3}")  # Show set temp
+        display.print(f"S{int(target_temp):>3}")  # show set temp
 
     time.sleep(0.1)
