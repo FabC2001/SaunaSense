@@ -1,4 +1,4 @@
-## This is the first test
+## This is the second test. It only updates one time per second, instead of 1o times per second
 
 ## Changed how warning mode works
 import time

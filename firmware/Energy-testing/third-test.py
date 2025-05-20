@@ -131,6 +131,8 @@ def format_seconds(seconds):
     secs = int(seconds) % 60
     return f"{mins:>2}{secs:02}"
 
+
+
 # === Main Loop Timers ===
 last_sensor_time = 0       # Last time sensor values were read
 last_display_time = 0      # Last time LEDs and display were updated
